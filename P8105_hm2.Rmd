@@ -1,9 +1,8 @@
 ---
 title: "P8105 HW2 - swr2118"
-author: "Spencer Riddell"
 output: github_document
 ---
-  
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
@@ -12,15 +11,18 @@ knitr::opts_chunk$set(
 )
 library(tidyverse)
 library(readxl)
+library(janitor)
+library(lubridate)
 ```
+
 
 # Problem 1
 
 ```{r problem1-load-and-clean}
 # Read data
-pols_month <- read_csv("data/pols-month.csv")
-unemployment <- read_csv("data/unemployment.csv")
-snp <- read_csv("data/snp.csv")
+pols_month <- read_csv("pols-month.csv")
+unemployment <- read_csv("unemployment.csv")
+snp <- read_csv("snp.csv")
 
 # Clean pols_month
 pols_month_clean <- pols_month %>%
@@ -58,26 +60,23 @@ unemployment_tidy <- unemployment %>%
 combined <- pols_month_clean %>%
   left_join(snp_clean, by = c("year", "month")) %>%
   left_join(unemployment_tidy, by = c("year", "month"))
-
-# Glimpse the result
-glimpse(combined)
 ```
 
 **Summary:**  
-  The `pols-month.csv` file includes monthly political information, such as whether the president was Democrat or Republican. `snp.csv` contains S&P stock index data by date. `unemployment.csv` has monthly unemployment rates in a wide format. After cleaning and joining, the final dataset contains `r nrow(combined)` rows and `r ncol(combined)` columns, with years from `r min(combined$year, na.rm=TRUE)` to `r max(combined$year, na.rm=TRUE)`. Key variables include year, month, president, S&P closing value, and unemployment rate.
+The pols-month file contains monthly political data on the presidency. The snp file contains S&P index monthly closing data. The unemployment file contains annual unemployment rates in wide format. After cleaning and merging, the combined dataset has `r nrow(combined)` rows and `r ncol(combined)` columns, spanning years `r min(combined$year, na.rm=TRUE)` to `r max(combined$year, na.rm=TRUE)`. Key variables include year, month, president, S&P closing value, and unemployment rate.
 
 # Problem 2
 
 ```{r problem2}
-# Read Mr. Trash Wheel sheet
-mr_trash <- read_excel("data/Trash-Wheel-Collection.xlsx", sheet = "Mr. Trash Wheel", skip = 1)
-prof_trash <- read_excel("data/Trash-Wheel-Collection.xlsx", sheet = "Professor Trash Wheel", skip = 1)
-gwynnda <- read_excel("data/Trash-Wheel-Collection.xlsx", sheet = "Gwynnda", skip = 1)
+# Read in all Trash Wheel sheets
+mr_trash <- read_excel("Trash-Wheel-Collection.xlsx", sheet = "Mr. Trash Wheel", skip = 1)
+prof_trash <- read_excel("Trash-Wheel-Collection.xlsx", sheet = "Professor Trash Wheel", skip = 1)
+gwynnda <- read_excel("Trash-Wheel-Collection.xlsx", sheet = "Gwynnda", skip = 1)
 
 # Clean and add wheel name
 clean_trash <- function(df, wheel_name) {
   df %>%
-    janitor::clean_names() %>%
+    clean_names() %>%
     filter(!is.na(dumpster)) %>%
     mutate(
       sports_balls = as.integer(round(sports_balls)),
@@ -106,17 +105,17 @@ The total weight of trash collected by Professor Trash Wheel is `r round(prof_to
 
 ```{r problem3}
 # Load Zillow and ZIP code data
-zillow <- read_csv("data/zillow_rent.csv")
-zipcodes <- read_csv("data/zip_codes.csv")
+zillow <- read_csv("zillow_rent.csv")
+zipcodes <- read_csv("zip_codes.csv")
 
-# Tidy zillow data (example: adjust as needed for your columns)
+# Tidy zillow data (adjust columns as needed)
 zillow_long <- zillow %>%
   pivot_longer(
     cols = matches("^\\d{4}-\\d{2}$"),
     names_to = "date",
     values_to = "rent"
   ) %>%
-  mutate(date = lubridate::ym(date)) %>%
+  mutate(date = ym(date)) %>%
   left_join(zipcodes, by = "zip")
 
 # Summary stats
@@ -129,10 +128,10 @@ missing_zips <- setdiff(zipcodes$zip, zillow$zip)
 
 # Table: 10 ZIPs with largest rent drop Jan 2020 → Jan 2021
 rent_2020_2021 <- zillow_long %>%
-  filter(lubridate::month(date) == 1, lubridate::year(date) %in% c(2020, 2021)) %>%
+  filter(month(date) == 1, year(date) %in% c(2020, 2021)) %>%
   select(zip, borough, neighborhood, date, rent) %>%
   pivot_wider(names_from = date, values_from = rent, names_prefix = "rent_") %>%
-  mutate(drop = rent_2021-01-01 - rent_2020-01-01) %>%
+  mutate(drop = `rent_2021-01-01` - `rent_2020-01-01`) %>%
   arrange(drop) %>%
   slice(1:10)
 
