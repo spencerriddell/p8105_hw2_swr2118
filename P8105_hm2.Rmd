@@ -13,13 +13,17 @@ library(tidyverse)
 library(readxl)
 library(janitor)
 library(lubridate)
+library(dplyr)
+library(tidyr)
+library(readr)
 ```
 
 
 # Problem 1
-
 ```{r problem1-load-and-clean}
-# Read data
+library(tidyverse)
+
+# Read data files
 pols_month <- read_csv("pols-month.csv")
 unemployment <- read_csv("unemployment.csv")
 snp <- read_csv("snp.csv")
@@ -28,9 +32,8 @@ snp <- read_csv("snp.csv")
 pols_month_clean <- pols_month %>%
   separate(mon, into = c("year", "month", "day"), sep = "-") %>%
   mutate(
-    year = as.integer(year),
-    month = as.integer(month),
-    month = month.name[month],
+    year = as.integer(.data$year),
+    month = as.integer(.data$month),
     president = if_else(prez_gop == 1, "gop", "dem")
   ) %>%
   select(-prez_dem, -prez_gop, -day)
@@ -39,8 +42,8 @@ pols_month_clean <- pols_month %>%
 snp_clean <- snp %>%
   separate(date, into = c("year", "month", "day"), sep = "-") %>%
   mutate(
-    year = as.integer(year),
-    month = as.integer(month)
+    year = as.integer(.data$year),
+    month = as.integer(.data$month)
   ) %>%
   arrange(year, month) %>%
   select(year, month, close, everything(), -day)
@@ -53,14 +56,22 @@ unemployment_tidy <- unemployment %>%
     values_to = "unemployment"
   ) %>%
   mutate(
-    month = match(month, month.abb)
+    month = match(month, month.abb),
+    year = as.integer(.data$Year)
   )
 
 # Join datasets
 combined <- pols_month_clean %>%
   left_join(snp_clean, by = c("year", "month")) %>%
   left_join(unemployment_tidy, by = c("year", "month"))
+
+# Optionally add a character month name for display
+combined <- combined %>%
+  mutate(month_name = month.name[month])
+
+glimpse(combined)
 ```
+
 
 **Summary:**  
 The pols-month file contains monthly political data on the presidency. The snp file contains S&P index monthly closing data. The unemployment file contains annual unemployment rates in wide format. After cleaning and merging, the combined dataset has `r nrow(combined)` rows and `r ncol(combined)` columns, spanning years `r min(combined$year, na.rm=TRUE)` to `r max(combined$year, na.rm=TRUE)`. Key variables include year, month, president, S&P closing value, and unemployment rate.
@@ -69,23 +80,28 @@ The pols-month file contains monthly political data on the presidency. The snp f
 
 ```{r problem2}
 # Read in all Trash Wheel sheets
-mr_trash <- read_excel("Trash-Wheel-Collection.xlsx", sheet = "Mr. Trash Wheel", skip = 1)
-prof_trash <- read_excel("Trash-Wheel-Collection.xlsx", sheet = "Professor Trash Wheel", skip = 1)
-gwynnda <- read_excel("Trash-Wheel-Collection.xlsx", sheet = "Gwynnda", skip = 1)
+mr_trash <- read_excel("202409 Trash Wheel Collection Data.xlsx", sheet = "Mr. Trash Wheel", skip = 1)
+prof_trash <- read_excel("202409 Trash Wheel Collection Data.xlsx", sheet = "Professor Trash Wheel", skip = 1)
+gwynnda_trash <- read_excel("202409 Trash Wheel Collection Data.xlsx", sheet = "Gwynnda Trash Wheel", skip = 1)
 
 # Clean and add wheel name
-clean_trash <- function(df, wheel_name) {
+clean_trash <- function(df, wheel_name, has_sports = FALSE) {
+  df <- janitor::clean_names(df) %>% 
+    filter(!is.na(dumpster))
+  print(colnames(df)) # DEBUG: check column names
+  if ("year" %in% names(df)) {
+    df <- df %>% mutate(year = as.integer(year))
+  }
+  if (has_sports && "sports" %in% names(df)) {
+    df <- df %>% mutate(sports = as.integer(round(sports)))
+  }
   df %>%
-    clean_names() %>%
-    filter(!is.na(dumpster)) %>%
-    mutate(
-      sports_balls = as.integer(round(sports_balls)),
-      wheel = wheel_name
-    )
+    mutate(wheel = wheel_name)
 }
-mr_clean <- clean_trash(mr_trash, "Mr. Trash Wheel")
+
+mr_clean <- clean_trash(mr_trash, "Mr. Trash Wheel", has_sports = TRUE)
 prof_clean <- clean_trash(prof_trash, "Professor Trash Wheel")
-gwynnda_clean <- clean_trash(gwynnda, "Gwynnda")
+gwynnda_clean <- clean_trash(gwynnda_trash, "Gwynnda Trash Wheel")
 
 # Combine all
 trash_all <- bind_rows(mr_clean, prof_clean, gwynnda_clean)
@@ -105,38 +121,44 @@ The total weight of trash collected by Professor Trash Wheel is `r round(prof_to
 
 ```{r problem3}
 # Load Zillow and ZIP code data
-zillow <- read_csv("zillow_rent.csv")
-zipcodes <- read_csv("zip_codes.csv")
+zillow <- read_csv("Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv")
+zipcodes <- read_csv("Zip Codes.csv")
 
-# Tidy zillow data (adjust columns as needed)
+# Rename RegionName to ZipCode in zillow for joining
+zillow <- zillow %>% rename(ZipCode = RegionName)
+
+# Tidy zillow data
 zillow_long <- zillow %>%
   pivot_longer(
-    cols = matches("^\\d{4}-\\d{2}$"),
+    cols = matches("^\\d{4}-\\d{2}-\\d{2}$"),
     names_to = "date",
     values_to = "rent"
   ) %>%
-  mutate(date = ym(date)) %>%
-  left_join(zipcodes, by = "zip")
+  mutate(date = as.Date(date)) %>%
+  left_join(zipcodes, by = "ZipCode") %>%
+  mutate(borough = County)
 
 # Summary stats
 total_obs <- nrow(zillow_long)
-unique_zips <- length(unique(zillow_long$zip))
-unique_neigh <- length(unique(zillow_long$neighborhood))
+unique_zips <- length(unique(zillow_long$ZipCode))
+unique_neigh <- length(unique(zillow_long$Neighborhood))
 
 # ZIPs in zipcodes not in zillow
-missing_zips <- setdiff(zipcodes$zip, zillow$zip)
+missing_zips <- setdiff(zipcodes$ZipCode, zillow$ZipCode)
 
 # Table: 10 ZIPs with largest rent drop Jan 2020 → Jan 2021
 rent_2020_2021 <- zillow_long %>%
   filter(month(date) == 1, year(date) %in% c(2020, 2021)) %>%
-  select(zip, borough, neighborhood, date, rent) %>%
+  select(ZipCode, borough, Neighborhood, date, rent) %>%
   pivot_wider(names_from = date, values_from = rent, names_prefix = "rent_") %>%
-  mutate(drop = `rent_2021-01-01` - `rent_2020-01-01`) %>%
+  mutate(
+    drop = .data[[paste0("rent_", as.Date("2021-01-31"))]] - .data[[paste0("rent_", as.Date("2020-01-31"))]]
+  ) %>%
   arrange(drop) %>%
   slice(1:10)
 
 rent_2020_2021 %>%
-  select(zip, borough, neighborhood, drop)
+  select(ZipCode, borough, Neighborhood, drop)
 ```
 
 The tidy Zillow dataset contains `r total_obs` observations, with `r unique_zips` unique ZIP codes and `r unique_neigh` unique neighborhoods.  
