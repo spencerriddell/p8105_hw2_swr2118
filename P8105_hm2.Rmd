@@ -92,8 +92,8 @@ clean_trash <- function(df, wheel_name, has_sports = FALSE) {
   if ("year" %in% names(df)) {
     df <- df %>% mutate(year = as.integer(year))
   }
-  if (has_sports && "sports" %in% names(df)) {
-    df <- df %>% mutate(sports = as.integer(round(sports)))
+if (has_sports && "sports_balls" %in% names(df)) {
+    df <- df %>% mutate(sports_balls = as.integer(round(sports_balls)))
   }
   df %>%
     mutate(wheel = wheel_name)
@@ -111,10 +111,12 @@ num_obs <- nrow(trash_all)
 prof_total_weight <- sum(prof_clean$weight_tons, na.rm = TRUE)
 gwynnda_june2022_cigs <- gwynnda_clean %>%
   filter(year == 2022, month == "June") %>%
-  pull(cigarette_butts) %>% sum(na.rm = TRUE)
+  pull(cigarette_butts) %>%
+  sum(na.rm = TRUE) %>%
+  as.integer()
 ```
 
-The combined trash wheel dataset has `r num_obs` observations. Example variables include `dumpster`, `month`, `year`, `weight_tons`, `sports_balls`, and `cigarette_butts`.  
+The combined trash wheel dataset has `r num_obs` observations. Example variables include `dumpster`, `month`, `year`, `weight_tons`, `sports`, and `cigarette_butts`.  
 The total weight of trash collected by Professor Trash Wheel is `r round(prof_total_weight,2)` tons. Gwynnda collected `r gwynnda_june2022_cigs` cigarette butts in June 2022.
 
 # Problem 3
